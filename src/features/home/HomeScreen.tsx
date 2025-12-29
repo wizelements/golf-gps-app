@@ -188,14 +188,29 @@ export function HomeScreen() {
             <div className="fact-text">{funFact}</div>
           </div>
 
-          {/* Offline Badge */}
-          <div className="offline-badge mt-lg">
-            <span className="offline-icon">📡</span>
-            <span>Works in Airplane Mode</span>
-          </div>
-        </div>
-      </div>
-    );
+          {/* Atlanta Showcase */}
+                  <div 
+                    className="card showcase-link mt-lg"
+                    onClick={() => navigate('/showcase/atlanta')}
+                  >
+                    <div className="showcase-link-content">
+                      <span className="showcase-link-emoji">🍑</span>
+                      <div>
+                        <div className="showcase-link-title">Atlanta Showcase</div>
+                        <div className="showcase-link-subtitle">4 courses with live OSM data</div>
+                      </div>
+                      <span className="showcase-link-arrow">→</span>
+                    </div>
+                  </div>
+
+                  {/* Offline Badge */}
+                  <div className="offline-badge mt-lg">
+                    <span className="offline-icon">📡</span>
+                    <span>Works in Airplane Mode</span>
+                  </div>
+                </div>
+              </div>
+            );
   }
 
   // Discovering view (loading)

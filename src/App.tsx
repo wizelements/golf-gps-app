@@ -15,6 +15,7 @@ import { RoundList } from '@/features/round/RoundList';
 import { ReplayScreen } from '@/features/analysis/ReplayScreen';
 import { StatsScreen } from '@/features/analysis/StatsScreen';
 import { QuickPlayScreen } from '@/features/quickplay/QuickPlayScreen';
+import { AtlantaShowcase } from '@/features/showcase/AtlantaShowcase';
 import '@/ui/styles.css';
 
 export default function App() {
@@ -30,6 +31,8 @@ export default function App() {
         <Route path="/quickplay/:courseId" element={<QuickPlayScreen />} />
         <Route path="/quickplay/osm/:osmData" element={<QuickPlayScreen />} />
         <Route path="/quickplay/new/:newCourseName" element={<QuickPlayScreen />} />
+        {/* Showcase */}
+        <Route path="/showcase/atlanta" element={<AtlantaShowcase />} />
         {/* Legacy routes */}
         <Route path="/courses" element={<CourseList />} />
         <Route path="/courses/new" element={<CourseBuilder />} />
