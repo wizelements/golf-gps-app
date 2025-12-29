@@ -14,6 +14,7 @@ import { RoundScreen } from '@/features/round/RoundScreen';
 import { RoundList } from '@/features/round/RoundList';
 import { ReplayScreen } from '@/features/analysis/ReplayScreen';
 import { StatsScreen } from '@/features/analysis/StatsScreen';
+import { QuickPlayScreen } from '@/features/quickplay/QuickPlayScreen';
 import '@/ui/styles.css';
 
 export default function App() {
@@ -22,9 +23,14 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/golf-gps-app">
       <Routes>
         <Route path="/" element={<HomeScreen />} />
+        {/* QuickPlay routes - the magic! */}
+        <Route path="/quickplay/:courseId" element={<QuickPlayScreen />} />
+        <Route path="/quickplay/osm/:osmData" element={<QuickPlayScreen />} />
+        <Route path="/quickplay/new/:newCourseName" element={<QuickPlayScreen />} />
+        {/* Legacy routes */}
         <Route path="/courses" element={<CourseList />} />
         <Route path="/courses/new" element={<CourseBuilder />} />
         <Route path="/courses/:courseId" element={<CourseDetail />} />
