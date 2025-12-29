@@ -1,0 +1,216 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          # Remove unnecessary pre-installed tools to save space
+          sudo rm -rf /usr/local/lib/android/sdk/ndk/26* /usr/local/lib/android/sdk/ndk/27* || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Add Android platform
+        run: |
+          npx cap add android || echo "Android platform may already exist"
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Set Gradle permissions
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        working-directory: android
+        run: |
+          ./gradlew assembleDebug 2>&1 | tee ../build-debug.log
+          echo "=== Build complete ==="
+          ls -la app/build/outputs/apk/debug/ || true
+
+      - name: Build Release APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease 2>&1 | tee ../build-release.log
+          echo "=== Release build complete ==="
+          ls -la app/build/outputs/apk/release/ || true
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: golf-gps-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: golf-gps-release-unsigned
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build-debug.log
+            build-release.log
+
+      - name: Show APK info
+        if: success()
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  ✓ APK Build Successful!"
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          DEBUG_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ -f "$DEBUG_APK" ]; then
+            SIZE=$(du -h "$DEBUG_APK" | cut -f1)
+            echo "  Debug APK: $SIZE"
+          fi
+          RELEASE_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ -f "$RELEASE_APK" ]; then
+            SIZE=$(du -h "$RELEASE_APK" | cut -f1)
+            echo "  Release APK: $SIZE"
+          fi
+          echo ""
+          echo "  Download from Actions artifacts"
+          echo "═══════════════════════════════════════════════════════════"
+
+  # Signed release build (optional - requires secrets)
+  build-signed:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    needs: build
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for signing secrets
+        id: check-secrets
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "has_secrets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_secrets=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Keystore secrets not configured. Skipping signed build."
+            echo "To enable signed builds, add these repository secrets:"
+            echo "  - KEYSTORE_BASE64: Base64-encoded keystore file"
+            echo "  - KEYSTORE_PASSWORD: Keystore password"
+            echo "  - KEY_ALIAS: Key alias name"
+            echo "  - KEY_PASSWORD: Key password"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Build and sign
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        run: |
+          npm ci
+          npm run build
+          npx cap add android || true
+          npx cap sync android
+          
+          # Decode keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore.jks
+          
+          # Build signed APK
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$PWD/app/keystore.jks \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Upload Signed APK
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: golf-gps-release-signed
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 90
