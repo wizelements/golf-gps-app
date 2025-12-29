@@ -214,3 +214,33 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 90
+
+      - name: Get version
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        id: version
+        run: |
+          VERSION=$(date +%Y.%m.%d-%H%M)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Golf GPS v${{ steps.version.outputs.version }}
+          body: |
+            ## Golf GPS App Release
+            
+            **What's included:**
+            - 4 Official City of Atlanta municipal courses
+            - GPS distance to green
+            - Hole-by-hole scorecard data
+            - Offline map caching
+            
+            **Install:** Download `golf-gps-signed.apk` and install on Android device.
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
