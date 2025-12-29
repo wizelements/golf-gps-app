@@ -1,12 +1,15 @@
 // Golf GPS Tracker - Service Worker
 // Simple offline-first caching strategy
 
-const CACHE_NAME = 'golf-gps-v1';
+const CACHE_NAME = 'golf-gps-v2';
+const BASE_PATH = '/golf-gps-app';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/favicon.svg'
+  BASE_PATH + '/',
+  BASE_PATH + '/index.html',
+  BASE_PATH + '/manifest.webmanifest',
+  BASE_PATH + '/favicon.svg',
+  BASE_PATH + '/pwa-192x192.png',
+  BASE_PATH + '/pwa-512x512.png'
 ];
 
 // Install: cache static assets
