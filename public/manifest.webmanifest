@@ -1,0 +1,29 @@
+{
+  "name": "Golf GPS Tracker",
+  "short_name": "GolfGPS",
+  "description": "Offline golf GPS and shot tracking app",
+  "theme_color": "#1a5f2a",
+  "background_color": "#0d1f12",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
