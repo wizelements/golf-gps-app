@@ -18,13 +18,11 @@ jobs:
 
       - name: Free up disk space
         run: |
-          # Remove unnecessary pre-installed tools to save space
           sudo rm -rf /usr/local/lib/android/sdk/ndk/26* /usr/local/lib/android/sdk/ndk/27* || true
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/share/boost || true
           sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          echo "=== Disk space after cleanup ==="
           df -h /
 
       - name: Setup Node.js
@@ -43,25 +41,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Accept Android licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            android/.gradle
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: node-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Install dependencies
         run: npm ci
@@ -69,15 +49,27 @@ jobs:
       - name: Build web app
         run: npm run build
 
-      - name: Add Android platform
+      - name: Clean and add Android platform
         run: |
-          npx cap add android || echo "Android platform may already exist"
+          rm -rf android
+          npx cap add android
+          ls -la android/
+          ls -la android/gradlew || echo "gradlew not found!"
 
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Set Gradle permissions
-        run: chmod +x android/gradlew
+      - name: Verify Gradle wrapper
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "ERROR: gradlew not found after cap add android"
+            echo "Generating Gradle wrapper manually..."
+            cd android
+            gradle wrapper --gradle-version 8.2.1
+            cd ..
+          fi
+          chmod +x android/gradlew
+          ls -la android/gradlew
 
       - name: Build Debug APK
         working-directory: android
@@ -125,7 +117,6 @@ jobs:
           echo "═══════════════════════════════════════════════════════════"
           echo "  ✓ APK Build Successful!"
           echo "═══════════════════════════════════════════════════════════"
-          echo ""
           DEBUG_APK="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ -f "$DEBUG_APK" ]; then
             SIZE=$(du -h "$DEBUG_APK" | cut -f1)
@@ -136,18 +127,13 @@ jobs:
             SIZE=$(du -h "$RELEASE_APK" | cut -f1)
             echo "  Release APK: $SIZE"
           fi
-          echo ""
-          echo "  Download from Actions artifacts"
           echo "═══════════════════════════════════════════════════════════"
 
-  # Signed release build (optional - requires secrets)
   build-signed:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     needs: build
-    if: |
-      github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
       - name: Checkout repository
@@ -160,12 +146,7 @@ jobs:
             echo "has_secrets=true" >> $GITHUB_OUTPUT
           else
             echo "has_secrets=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Keystore secrets not configured. Skipping signed build."
-            echo "To enable signed builds, add these repository secrets:"
-            echo "  - KEYSTORE_BASE64: Base64-encoded keystore file"
-            echo "  - KEYSTORE_PASSWORD: Keystore password"
-            echo "  - KEY_ALIAS: Key alias name"
-            echo "  - KEY_PASSWORD: Key password"
+            echo "⚠️ Keystore secrets not configured - skipping signed build"
           fi
 
       - name: Setup Node.js
@@ -186,20 +167,25 @@ jobs:
         if: steps.check-secrets.outputs.has_secrets == 'true'
         uses: android-actions/setup-android@v3
 
+      - name: Accept Android licenses
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
       - name: Build and sign
         if: steps.check-secrets.outputs.has_secrets == 'true'
         run: |
           npm ci
           npm run build
-          npx cap add android || true
+          
+          rm -rf android
+          npx cap add android
           npx cap sync android
           
-          # Decode keystore
+          chmod +x android/gradlew
+          
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore.jks
           
-          # Build signed APK
           cd android
-          chmod +x gradlew
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=$PWD/app/keystore.jks \
             -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
@@ -231,15 +217,14 @@ jobs:
           body: |
             ## Golf GPS App Release
             
-            **What's included:**
+            **Features:**
             - 4 Official City of Atlanta municipal courses
             - GPS distance to green
             - Hole-by-hole scorecard data
             - Offline map caching
             
-            **Install:** Download `golf-gps-signed.apk` and install on Android device.
-          files: |
-            android/app/build/outputs/apk/release/app-release.apk
+            **Install:** Download the APK and install on Android device.
+          files: android/app/build/outputs/apk/release/app-release.apk
           draft: false
           prerelease: false
         env:
